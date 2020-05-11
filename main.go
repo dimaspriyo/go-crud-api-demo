@@ -1,13 +1,21 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"go-crud-api-demo/repository"
 	"net/http"
+)
+
+var (
+	ctx    context.Context
+	cancel context.CancelFunc
 )
 
 func main() {
 
 	//v1 just plain API without authentication
-	http.HandleFunc("v1", listV1)
+	http.HandleFunc("/v1", listV1)
 	http.HandleFunc("v1/insert", insertV1)
 	http.HandleFunc("v1/update", updateV1)
 	http.HandleFunc("v1/delete", deleteV1)
@@ -24,6 +32,18 @@ func main() {
 
 func listV1(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	db, err := repository.NewConn(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	list, err := repository.List(db)
+	if err != nil {
+		panic(err)
+	}
+	json.NewEncoder(w).Encode(list)
 }
 func insertV1(w http.ResponseWriter, r *http.Request) {
 

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"go-crud-api-demo/config"
 	"go-crud-api-demo/repository"
 	"net/http"
 	"strconv"
@@ -19,10 +21,17 @@ type Response struct {
 	Message string              `json:"message,omitempty"`
 	Data    []repository.Person `json:"data,omitempty"`
 	Error   string              `json:"error,omitempty"`
+	Token   string              `json:"token,omitempty"` //for JWT Token
+}
+
+//Key Request Struct
+type KeyRequest struct {
+	Key string `json:"key"`
 }
 
 var person repository.Person
 var response Response
+var keyRequest KeyRequest
 
 func main() {
 	mux := http.NewServeMux()
@@ -34,6 +43,7 @@ func main() {
 	mux.HandleFunc("/v1/delete/", deleteV1)
 
 	//v1 API authentication using JWT
+	mux.HandleFunc("/v2/token", tokenV2)
 	mux.HandleFunc("/v2", listV2)
 	mux.HandleFunc("/v2/insert", insertV2)
 	mux.HandleFunc("/v2/update/", updateV2)
@@ -187,6 +197,31 @@ func deleteV1(w http.ResponseWriter, r *http.Request) {
 
 }
 
+//================================
+
+func tokenV2(w http.ResponseWriter, r *http.Request) {
+
+	//context := r.Context()
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&keyRequest)
+	if err != nil {
+		response.Error = err.Error()
+		jsonResponse(w, response)
+		return
+	}
+
+	err = checkJWT(keyRequest.Key)
+	if err != nil {
+		response.Error = err.Error()
+		jsonResponse(w, response)
+		return
+	}
+
+	response.Message = "Here's your Token"
+	jsonResponse(w, response)
+}
+
 func listV2(w http.ResponseWriter, r *http.Request) {
 
 }
@@ -216,5 +251,22 @@ func jsonResponse(w http.ResponseWriter, response Response) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+
+}
+
+func checkJWT(key string) (err error) {
+
+	var JSONConfig config.JSONConfig
+	JSONConfig, err = config.ReadJSONConfig()
+	if err != nil {
+		return err
+	}
+
+	//Check Key for requesting token
+	if key != JSONConfig.Key {
+		return errors.New("Request Key Incorrect")
+	}
+
+	return nil
 
 }

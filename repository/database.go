@@ -12,7 +12,7 @@ func NewConn(ctx context.Context) (*sql.DB, error) {
 
 	var connString string
 
-	read, err := config.ReadConfig()
+	read, err := config.ReadYAMLConfig()
 	if err != nil {
 		return nil, err
 	}

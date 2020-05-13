@@ -31,19 +31,25 @@ func main() {
 	mux.HandleFunc("/v1", listV1)
 	mux.HandleFunc("/v1/insert", insertV1)
 	mux.HandleFunc("/v1/update/", updateV1)
-	mux.HandleFunc("/v1/delete", deleteV1)
+	mux.HandleFunc("/v1/delete/", deleteV1)
 
 	//v1 API authentication using JWT
 	mux.HandleFunc("/v2", listV2)
 	mux.HandleFunc("/v2/insert", insertV2)
-	mux.HandleFunc("/v2/update", updateV2)
-	mux.HandleFunc("/v2/delete", deleteV2)
+	mux.HandleFunc("/v2/update/", updateV2)
+	mux.HandleFunc("/v2/delete/", deleteV2)
 
 	http.ListenAndServe(":8080", mux)
 
 }
 
 func listV1(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "GET" {
+		response.Message = "Invalid HTTP Method"
+		jsonResponse(w, response)
+		return
+	}
 
 	ctx := r.Context()
 
@@ -66,6 +72,12 @@ func listV1(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, response)
 }
 func insertV1(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "POST" {
+		response.Message = "Invalid HTTP Method"
+		jsonResponse(w, response)
+		return
+	}
 
 	ctx := r.Context()
 
@@ -97,6 +109,12 @@ func insertV1(w http.ResponseWriter, r *http.Request) {
 
 }
 func updateV1(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "PUT" {
+		response.Message = "Invalid HTTP Method"
+		jsonResponse(w, response)
+		return
+	}
 
 	ctx := r.Context()
 	decoder := json.NewDecoder(r.Body)
@@ -137,6 +155,35 @@ func updateV1(w http.ResponseWriter, r *http.Request) {
 
 }
 func deleteV1(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "DELETE" {
+		response.Message = "Invalid HTTP Method"
+		jsonResponse(w, response)
+		return
+	}
+
+	ctx := r.Context()
+
+	rawID := lastURI(r.RequestURI)
+	//convert string to int64
+	id, err := strconv.ParseInt(rawID, 10, 64)
+
+	db, err := repository.NewConn(ctx)
+	if err != nil {
+		response.Error = err.Error()
+		jsonResponse(w, response)
+		return
+	}
+
+	err = repository.Delete(ctx, db, id)
+	if err != nil {
+		response.Error = err.Error()
+		jsonResponse(w, response)
+		return
+	}
+
+	response.Message = "Delete Success"
+	jsonResponse(w, response)
 
 }
 

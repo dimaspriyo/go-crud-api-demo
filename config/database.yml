@@ -1,8 +1,0 @@
-database:
-  username: root
-  password: root
-  host: localhost
-  name: go-crud-api-demo
-  port: 3306
-
-

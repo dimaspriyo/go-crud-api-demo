@@ -100,3 +100,25 @@ func Update(ctx context.Context, db *sql.DB, person Person, personId int64) (res
 	return Detail(db, personId)
 
 }
+
+func Delete(ctx context.Context, db *sql.DB, id int64) (err error) {
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE from persons where id=?", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}

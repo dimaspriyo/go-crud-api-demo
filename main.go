@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 var (
@@ -29,10 +31,6 @@ type KeyRequest struct {
 	Key string `json:"key"`
 }
 
-var person repository.Person
-var response Response
-var keyRequest KeyRequest
-
 func main() {
 	mux := http.NewServeMux()
 
@@ -44,16 +42,26 @@ func main() {
 
 	//v1 API authentication using JWT
 	mux.HandleFunc("/v2/token", tokenV2)
-	mux.HandleFunc("/v2", listV2)
-	mux.HandleFunc("/v2/insert", insertV2)
-	mux.HandleFunc("/v2/update/", updateV2)
-	mux.HandleFunc("/v2/delete/", deleteV2)
+
+	handlerListV2 := http.HandlerFunc(listV2)
+	mux.Handle("/v2", JWtAuthenticationMiddleware(handlerListV2))
+
+	handlerInsertV2 := http.HandlerFunc(insertV2)
+	mux.Handle("/v2/insert", JWtAuthenticationMiddleware(handlerInsertV2))
+
+	handlerUpdateV2 := http.HandlerFunc(updateV2)
+	mux.Handle("/v2/update/", JWtAuthenticationMiddleware(handlerUpdateV2))
+
+	handlerDeleteV2 := http.HandlerFunc(deleteV2)
+	mux.Handle("/v2/delete/", JWtAuthenticationMiddleware(handlerDeleteV2))
 
 	http.ListenAndServe(":8080", mux)
 
 }
 
 func listV1(w http.ResponseWriter, r *http.Request) {
+
+	var response Response
 
 	if r.Method != "GET" {
 		response.Message = "Invalid HTTP Method"
@@ -82,6 +90,9 @@ func listV1(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, response)
 }
 func insertV1(w http.ResponseWriter, r *http.Request) {
+
+	var person repository.Person
+	var response Response
 
 	if r.Method != "POST" {
 		response.Message = "Invalid HTTP Method"
@@ -119,6 +130,9 @@ func insertV1(w http.ResponseWriter, r *http.Request) {
 
 }
 func updateV1(w http.ResponseWriter, r *http.Request) {
+
+	var person repository.Person
+	var response Response
 
 	if r.Method != "PUT" {
 		response.Message = "Invalid HTTP Method"
@@ -166,6 +180,8 @@ func updateV1(w http.ResponseWriter, r *http.Request) {
 }
 func deleteV1(w http.ResponseWriter, r *http.Request) {
 
+	var response Response
+
 	if r.Method != "DELETE" {
 		response.Message = "Invalid HTTP Method"
 		jsonResponse(w, response)
@@ -199,9 +215,29 @@ func deleteV1(w http.ResponseWriter, r *http.Request) {
 
 //================================
 
+func JWtAuthenticationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var response Response
+
+			token := r.Header.Get("Authorization")
+
+			err := checkJWTToken(token)
+			if err != nil {
+				response.Error = err.Error()
+				jsonResponse(w, response)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+}
+
 func tokenV2(w http.ResponseWriter, r *http.Request) {
 
-	//context := r.Context()
+	var response Response
+	var keyRequest KeyRequest
+
 	decoder := json.NewDecoder(r.Body)
 
 	err := decoder.Decode(&keyRequest)
@@ -211,7 +247,7 @@ func tokenV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = checkJWT(keyRequest.Key)
+	err = checkRequestKey(keyRequest.Key)
 	if err != nil {
 		response.Error = err.Error()
 		jsonResponse(w, response)
@@ -219,6 +255,15 @@ func tokenV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Message = "Here's your Token"
+
+	token, err := generateJWTToken()
+	if err != nil {
+		response.Error = err.Error()
+		jsonResponse(w, response)
+		return
+	}
+	response.Token = token
+
 	jsonResponse(w, response)
 }
 
@@ -254,7 +299,7 @@ func jsonResponse(w http.ResponseWriter, response Response) {
 
 }
 
-func checkJWT(key string) (err error) {
+func checkRequestKey(key string) (err error) {
 
 	var JSONConfig config.JSONConfig
 	JSONConfig, err = config.ReadJSONConfig()
@@ -265,6 +310,44 @@ func checkJWT(key string) (err error) {
 	//Check Key for requesting token
 	if key != JSONConfig.Key {
 		return errors.New("Request Key Incorrect")
+	}
+
+	return nil
+
+}
+
+func generateJWTToken() (token string, err error) {
+
+	var JSONConfig config.JSONConfig
+	JSONConfig, err = config.ReadJSONConfig()
+	if err != nil {
+		return token, err
+	}
+
+	generate := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user": "admin"})
+
+	token, err = generate.SignedString([]byte(JSONConfig.Secret))
+	return token, nil
+
+}
+
+func checkJWTToken(myToken string) (err error) {
+
+	myToken = strings.Replace(myToken, "Bearer ", "", -1)
+	var JSONConfig config.JSONConfig
+	JSONConfig, err = config.ReadJSONConfig()
+	if err != nil {
+		return err
+	}
+
+	token, err := jwt.Parse(myToken, func(token *jwt.Token) (interface{}, error) {
+		return []byte(JSONConfig.Secret), nil
+	})
+
+	_, ok := token.Claims.(jwt.MapClaims)
+	if !token.Valid || !ok {
+		return errors.New("Invalid Token")
 	}
 
 	return nil

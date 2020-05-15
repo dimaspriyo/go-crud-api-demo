@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-crud-api-demo/config"
 	"go-crud-api-demo/repository"
 	"net/http"
@@ -43,16 +44,16 @@ func main() {
 	//v1 API authentication using JWT
 	mux.HandleFunc("/v2/token", tokenV2)
 
-	handlerListV2 := http.HandlerFunc(listV2)
+	handlerListV2 := http.HandlerFunc(listV1)
 	mux.Handle("/v2", JWtAuthenticationMiddleware(handlerListV2))
 
-	handlerInsertV2 := http.HandlerFunc(insertV2)
+	handlerInsertV2 := http.HandlerFunc(insertV1)
 	mux.Handle("/v2/insert", JWtAuthenticationMiddleware(handlerInsertV2))
 
-	handlerUpdateV2 := http.HandlerFunc(updateV2)
+	handlerUpdateV2 := http.HandlerFunc(updateV1)
 	mux.Handle("/v2/update/", JWtAuthenticationMiddleware(handlerUpdateV2))
 
-	handlerDeleteV2 := http.HandlerFunc(deleteV2)
+	handlerDeleteV2 := http.HandlerFunc(deleteV1)
 	mux.Handle("/v2/delete/", JWtAuthenticationMiddleware(handlerDeleteV2))
 
 	http.ListenAndServe(":8080", mux)
@@ -127,6 +128,7 @@ func insertV1(w http.ResponseWriter, r *http.Request) {
 
 	response.Message = "Insert Success"
 	response.Data = []repository.Person{res}
+	jsonResponse(w, response)
 
 }
 func updateV1(w http.ResponseWriter, r *http.Request) {
@@ -267,21 +269,6 @@ func tokenV2(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, response)
 }
 
-func listV2(w http.ResponseWriter, r *http.Request) {
-
-}
-func insertV2(w http.ResponseWriter, r *http.Request) {
-
-}
-func updateV2(w http.ResponseWriter, r *http.Request) {
-
-}
-func deleteV2(w http.ResponseWriter, r *http.Request) {
-
-}
-
-//=========
-
 func lastURI(RequestURI string) string {
 
 	last := strings.Split(RequestURI, "/")
@@ -342,11 +329,22 @@ func checkJWTToken(myToken string) (err error) {
 	}
 
 	token, err := jwt.Parse(myToken, func(token *jwt.Token) (interface{}, error) {
+
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+
 		return []byte(JSONConfig.Secret), nil
 	})
 
-	_, ok := token.Claims.(jwt.MapClaims)
-	if !token.Valid || !ok {
+	// _, ok := token.Claims.(jwt.MapClaims)
+	// if !token.Valid || !ok {
+	// 	return errors.New("Invalid Token")
+	// }
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		fmt.Printf("Hi %s", claims["user"])
+	} else {
 		return errors.New("Invalid Token")
 	}
 
